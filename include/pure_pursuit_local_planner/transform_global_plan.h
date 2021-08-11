@@ -26,6 +26,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Point.h>
 #include <tf/transform_listener.h>
+#include <pure_pursuit_local_planner/pure_pursuit_config.h>
 
 #include <string>
 #include <cmath>
@@ -42,9 +43,9 @@ namespace pure_pursuit_local_planner
     * @param goal_pose the pose to copy into
     * @return True if achieved, false otherwise
     */
-    bool getXPose(const tf::TransformListener& tf,
-                  const std::vector<geometry_msgs::PoseStamped>& global_plan,
-                  const std::string& global_frame,
-                  tf::Stamped<tf::Pose> &goal_pose, int plan_point);
+    bool getGoalPose(const tf2_ros::Buffer& tf, const costmap_2d::Costmap2D& costmap,
+                  pure_pursuit_local_planner::PurePursuitConfig cfg, const std::vector<geometry_msgs::PoseStamped>& global_plan,
+                  const geometry_msgs::PoseStamped& global_pose, geometry_msgs::PoseStamped& goal_pose,
+                  const std::string global_frame, ros::Publisher global_goal_publisher);
 };
 #endif

@@ -16,59 +16,156 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 */
 
 #include <pure_pursuit_local_planner/transform_global_plan.h>
+#include <pure_pursuit_local_planner/misc.h>
+#include<costmap_2d/costmap_layer.h>
+#include <cv_bridge/cv_bridge.h>
+#include <opencv2/highgui/highgui.hpp>
+
+using costmap_2d::FREE_SPACE;
 
 namespace pure_pursuit_local_planner
 {
-    bool getXPose(const tf::TransformListener& tf,
-                  const std::vector<geometry_msgs::PoseStamped>& global_plan,
-                  const std::string& global_frame, tf::Stamped<tf::Pose>& goal_pose, int plan_point)
+  bool getGoalPose(const tf2_ros::Buffer& tf, const costmap_2d::Costmap2D& costmap,
+                pure_pursuit_local_planner::PurePursuitConfig cfg, const std::vector<geometry_msgs::PoseStamped>& global_plan,
+                const geometry_msgs::PoseStamped& global_pose, geometry_msgs::PoseStamped& goal_pose,
+                const std::string global_frame, ros::Publisher global_goal_publisher)
+  {
+    try 
     {
-        if (global_plan.empty())
-        {
-            ROS_ERROR("Received plan with zero length");
-            return false;
-        }
-        if(plan_point >= (int)global_plan.size())
-        {
-            ROS_ERROR("Goal_functions: Plan_point %d to big. Plan size: %lu",plan_point, global_plan.size());
-            return false;
-        }
+      if (global_plan.empty())
+      {
+          ROS_ERROR("Received plan with zero length");
+          return false;
+      }
 
-        const geometry_msgs::PoseStamped& plan_goal_pose = global_plan.at(plan_point);
-        try
-        {
-            tf::StampedTransform transform;
-            tf.waitForTransform(global_frame, ros::Time::now(),
-                                plan_goal_pose.header.frame_id, plan_goal_pose.header.stamp,
-                                plan_goal_pose.header.frame_id, ros::Duration(0.5));
-            tf.lookupTransform(global_frame, ros::Time(),
-                               plan_goal_pose.header.frame_id, plan_goal_pose.header.stamp,
-                               plan_goal_pose.header.frame_id, transform);
+      const geometry_msgs::PoseStamped& plan_pose = global_plan[0];
 
-            poseStampedMsgToTF(plan_goal_pose, goal_pose);
-            goal_pose.setData(transform * goal_pose);
-            goal_pose.stamp_ = transform.stamp_;
-            goal_pose.frame_id_ = global_frame;
+      // get plan_to_global_transform from plan frame to global_frame
+      geometry_msgs::TransformStamped plan_to_global_transform = tf.lookupTransform(global_frame, ros::Time(), plan_pose.header.frame_id, ros::Time(),
+                                                                                    plan_pose.header.frame_id, ros::Duration(0.1));
 
-        }
-        catch(tf::LookupException& ex)
-        {
-            ROS_ERROR("No Transform available Error: %s\n", ex.what());
-            return false;
-        }
-        catch(tf::ConnectivityException& ex)
-        {
-            ROS_ERROR("Connectivity Error: %s\n", ex.what());
-            return false;
-        }
-        catch(tf::ExtrapolationException& ex)
-        {
-            ROS_ERROR("Extrapolation Error: %s\n", ex.what());
-            if (global_plan.size() > 0)
-                ROS_ERROR("Global Frame: %s Plan Frame size %d: %s\n", global_frame.c_str(), (unsigned int)global_plan.size(), global_plan[0].header.frame_id.c_str());
+      geometry_msgs::TransformStamped global_to_plan_transform = tf.lookupTransform(plan_pose.header.frame_id, ros::Time(), global_frame, ros::Time(),
+                                                                                    global_frame, ros::Duration(0.1));
 
-            return false;
+      //let's get the pose of the robot in the frame of the plan
+      geometry_msgs::PoseStamped robot_pose;
+      tf.transform(global_pose, robot_pose, plan_pose.header.frame_id);
+      
+      double dist_threshold = std::max(costmap.getSizeInCellsX() * costmap.getResolution() / 2.0,
+                                      costmap.getSizeInCellsY() * costmap.getResolution() / 2.0);
+      dist_threshold *= 0.85; // TODO: Make this configurable?
+      int i = 0;
+      double sq_dist_threshold = dist_threshold * dist_threshold;
+      double sq_dist = 1e10;
+      geometry_msgs::PoseStamped furthest_pose;
+
+      bool robot_reached = false;
+      for(int j=0; j < (int)global_plan.size(); ++j)
+      {
+        double x_diff = robot_pose.pose.position.x - global_plan[j].pose.position.x;
+        double y_diff = robot_pose.pose.position.y - global_plan[j].pose.position.y;
+        double new_sq_dist = x_diff * x_diff + y_diff * y_diff;
+
+        if (robot_reached && new_sq_dist > sq_dist)
+          break;
+
+        if (new_sq_dist < sq_dist) // find closest distance
+        {
+          sq_dist = new_sq_dist;
+          i = j;
+          if (sq_dist < 0.005)      // 2.5 cm to the robot; take the immediate local minima; if it's not the global
+            robot_reached = true;  // minima, probably means that there's a loop in the path, and so we prefer this
         }
-        return true;
+      }
+
+      double plan_length = 0.0;
+      sq_dist = 0.0;
+      // Next we find the point in the global plan that is the furthest awaz
+      while(i < (int)global_plan.size() && sq_dist <= sq_dist_threshold && (cfg.max_planning_dist<=0 || plan_length <= cfg.max_planning_dist))
+      {
+        const geometry_msgs::PoseStamped& pose = global_plan[i];
+        furthest_pose = pose;
+
+        double x_diff = robot_pose.pose.position.x - global_plan[i].pose.position.x;
+        double y_diff = robot_pose.pose.position.y - global_plan[i].pose.position.y;
+        sq_dist = x_diff * x_diff + y_diff * y_diff;
+        
+        // caclulate distance to previous pose
+        if (i>0 && cfg.max_planning_dist>0)
+          plan_length += distance_points2d(global_plan[i-1].pose.position, global_plan[i].pose.position);
+
+        ++i;
+      }
+      //global_goal_publisher.publish(furthest_pose);
+
+
+      cv::Mat map, mask, dist_map, dist_map_32f;
+      // Convert costmap to opencv Mat    
+      unsigned char *char_map = costmap.getCharMap();
+      cv::Size map_size(costmap.getSizeInCellsY(), costmap.getSizeInCellsX());
+      map = cv::Mat(map_size, CV_8UC1, char_map).clone();
+
+      // set all free to space 255, lethal and unknown to 0
+      cv::inRange(map, FREE_SPACE, FREE_SPACE, mask);
+      map = 0;
+      map.setTo(255, mask);
+
+      // Perform distance transform
+      cv::distanceTransform(map, dist_map_32f, cv::DIST_L2, 3);
+      //cv::normalize(dist_32f, dist_32f, 0, 255, cv::NORM_MINMAX);
+      dist_map_32f.convertTo(dist_map, CV_8U);
+
+
+      geometry_msgs::PoseStamped tmp_pose, cmp_pose;
+      double nearest_sq_dist = 1.79769e+308;
+      int road_threshold = 1;
+
+      for(int y=0; y < costmap.getSizeInCellsY(); y++) {
+        uchar* map_values = map.ptr<uchar>(y);
+        uchar* distance_values = dist_map.ptr<uchar>(y);
+
+        for(int x=0; x < costmap.getSizeInCellsX(); x++) {
+          int map_value = map_values[x];
+          uchar dist_value = distance_values[x];
+
+          if(map_value == 255 && dist_value > road_threshold) {
+            tmp_pose.header.stamp = ros::Time::now();
+            tmp_pose.header.frame_id = global_pose.header.frame_id;
+            tmp_pose.pose.position.x = global_pose.pose.position.x + ((x - map.rows / 2) * costmap.getResolution());
+            tmp_pose.pose.position.y = global_pose.pose.position.y + ((y - map.cols / 2) * costmap.getResolution());
+
+            tf2::doTransform(tmp_pose, cmp_pose, global_to_plan_transform);
+            double dist_x = cmp_pose.pose.position.x;
+            double dist_y = cmp_pose.pose.position.y;
+
+            double x_diff = dist_x - furthest_pose.pose.position.x;
+            double y_diff = dist_y - furthest_pose.pose.position.y;
+            sq_dist = x_diff * x_diff + y_diff * y_diff;
+          
+            if(sq_dist < nearest_sq_dist) {
+              nearest_sq_dist = sq_dist;
+              goal_pose = tmp_pose;
+            }
+          }
+        }
+      }
     }
-}
+    catch(tf::LookupException& ex)
+    {
+      ROS_ERROR("No Transform available Error: %s\n", ex.what());
+      return false;
+    }
+    catch(tf::ConnectivityException& ex) 
+    {
+      ROS_ERROR("Connectivity Error: %s\n", ex.what());
+      return false;
+    }
+    catch(tf::ExtrapolationException& ex) 
+    {
+      ROS_ERROR("Extrapolation Error: %s\n", ex.what());
+      return false;
+    }
+
+    return true;
+  }
+};

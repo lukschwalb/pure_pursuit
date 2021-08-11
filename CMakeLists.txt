@@ -33,7 +33,7 @@ link_directories(${catkin_LIBRARY_DIRS})
 
 # dynamic reconfigure
 generate_dynamic_reconfigure_options(
-        cfg/PurePursuitPlanner.cfg
+        cfg/PurePursuitReconfigure.cfg
 )
 
 catkin_package(
@@ -48,7 +48,7 @@ catkin_package(
 add_library(pure_pursuit_local_planner
         src/pure_pursuit_planner.cpp
         src/transform_global_plan.cpp
-        src/join_costmap.cpp)
+        src/pure_pursuit_config.cpp)
 
 target_link_libraries(pure_pursuit_local_planner ${catkin_LIBRARIES})
 add_dependencies(pure_pursuit_local_planner pure_pursuit_local_planner_gencfg)
