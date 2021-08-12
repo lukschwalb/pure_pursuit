@@ -35,3 +35,6 @@
 maps/
 
 cmake-build-debug/
+
+.vscode
+
