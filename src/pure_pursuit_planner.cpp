@@ -73,27 +73,55 @@ namespace pure_pursuit_local_planner {
       return false;
     }
 
+    nav_msgs::Path local_plan;
+    local_plan.header.frame_id = "base_link";
+    local_plan.header.stamp = ros::Time::now();
     geometry_msgs::PoseStamped goal_pose_base;
     tf2::doTransform(goal_pose_, goal_pose_base, global_to_base_transform);
 
+    // Lookahead distance
 		double ld = cfg_.look_ahead_ratio * last_vel_ + cfg_.look_ahead_dist;
+    double ld_2 = ld * ld;
 
+    // x and y difference from robot pose to goal pose in base frame
 		double dy = goal_pose_base.pose.position.y;
 		double dx = goal_pose_base.pose.position.x;
 
+    // Gradient of line connecting (0|0) and (dx|dy)
     double gradient = dx / dy;
+    // Y Position where line has a length of ld
     double py = ld / std::sqrt( 1 + gradient*gradient );
 
-    double ld_2 = ld * ld;
+    // Curvature of the arc connecting (0|0) and (px|py)
+    double curvature = (2*py)/ld_2;
+    // Radius of the circle that describes the arc
+    double radius = 1/curvature;
+
+
+    for(double _y = 1; _y >= 1 - (py / radius); _y -= 0.1) {
+      double alpha = acos(_y);
+      double _x = sin(alpha);
+      double pos_x = _x * radius;
+      double pos_y = (1 - _y) * radius;
+      pos_y = std::copysign(pos_y, gradient);
+
+      geometry_msgs::PoseStamped pose;
+      pose.header.frame_id = local_plan.header.frame_id;
+      pose.header.stamp = local_plan.header.stamp;
+      pose.pose.position.x = pos_x;
+      pose.pose.position.y = pos_y;
+      local_plan.poses.push_back(pose);
+    }
+
+    local_plan_publisher_.publish(local_plan);
     double ang_z = (2 * cfg_.velocity) / ld_2 * py;
     ang_z = std::copysign(ang_z, gradient);
-
     cmd_vel.angular.z = ang_z;
 
     cmd_vel.linear.x = cfg_.velocity;
     last_vel_ = cfg_.velocity;
 
-    if(distance_points2d(final_goal_pose_.pose.position, goal_pose_.pose.position) <= cfg_.goal_accuracy)
+    if(distance_points2d(robot_pose.pose.position, goal_pose_.pose.position) <= cfg_.goal_accuracy)
     {
         goal_reached_ = true;
         cmd_vel.linear.x = 0;

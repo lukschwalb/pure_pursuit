@@ -96,7 +96,7 @@ namespace pure_pursuit_local_planner
 
         ++i;
       }
-      //global_goal_publisher.publish(furthest_pose);
+      global_goal_publisher.publish(furthest_pose);
 
 
       cv::Mat map, mask, dist_map, dist_map_32f;
@@ -118,7 +118,6 @@ namespace pure_pursuit_local_planner
 
       geometry_msgs::PoseStamped tmp_pose, cmp_pose;
       double nearest_sq_dist = 1.79769e+308;
-      int road_threshold = 1;
 
       for(int y=0; y < costmap.getSizeInCellsY(); y++) {
         uchar* map_values = map.ptr<uchar>(y);
@@ -128,7 +127,7 @@ namespace pure_pursuit_local_planner
           int map_value = map_values[x];
           uchar dist_value = distance_values[x];
 
-          if(map_value == 255 && dist_value > road_threshold) {
+          if(map_value == 255 && dist_value > cfg.road_threshold) {
             tmp_pose.header.stamp = ros::Time::now();
             tmp_pose.header.frame_id = global_pose.header.frame_id;
             tmp_pose.pose.position.x = global_pose.pose.position.x + ((x - map.rows / 2) * costmap.getResolution());

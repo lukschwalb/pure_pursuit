@@ -11,7 +11,7 @@ void PurePursuitConfig::loadParamFromNodeHandle(const ros::NodeHandle& nh)
   nh.param("velocity", velocity, velocity);
   nh.param("look_ahead_dist", look_ahead_dist, look_ahead_dist);
   nh.param("look_ahead_ratio", look_ahead_ratio, look_ahead_ratio);
-  nh.param("epsilon", epsilon, epsilon);
+  nh.param("road_threshold", road_threshold, road_threshold);
 }
 
 void PurePursuitConfig::reconfigure(PurePursuitReconfigureConfig& cfg)
@@ -21,7 +21,7 @@ void PurePursuitConfig::reconfigure(PurePursuitReconfigureConfig& cfg)
   velocity = cfg.velocity;
   look_ahead_dist = cfg.look_ahead_dist;
   look_ahead_ratio = cfg.look_ahead_ratio;
-  epsilon = cfg.epsilon;
+  road_threshold = cfg.road_threshold;
 }
 
     
