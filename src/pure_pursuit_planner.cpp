@@ -29,6 +29,8 @@ namespace pure_pursuit_local_planner {
     dynamic_reconfigure::Server<PurePursuitReconfigureConfig>::CallbackType cb = boost::bind(&PurePursuitPlanner::reconfigureCB, this, _1, _2);
     dsrv_->setCallback(cb);
 
+    last_vel_ = cfg_.velocity;
+
     ROS_INFO("PurePursuitPlanner Initialized");
     initialized_ = true;
   }
@@ -87,6 +89,7 @@ namespace pure_pursuit_local_planner {
 		double dy = goal_pose_base.pose.position.y;
 		double dx = goal_pose_base.pose.position.x;
 
+
     // Gradient of line connecting (0|0) and (dx|dy)
     double gradient = dx / dy;
     // Y Position where line has a length of ld
@@ -97,8 +100,7 @@ namespace pure_pursuit_local_planner {
     // Radius of the circle that describes the arc
     double radius = 1/curvature;
 
-
-    for(double _y = 1; _y >= 1 - (py / radius); _y -= 0.1) {
+    for(double _y = 1; _y >= 1 - (py / radius); _y -= (py / radius) / 10) {
       double alpha = acos(_y);
       double _x = sin(alpha);
       double pos_x = _x * radius;

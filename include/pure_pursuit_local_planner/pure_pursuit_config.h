@@ -18,7 +18,8 @@ namespace pure_pursuit_local_planner
     double velocity;
     double look_ahead_dist;
     double look_ahead_ratio;
-    int road_threshold;
+    double road_dist_weight;
+    double goal_dist_weight;
     
     PurePursuitConfig()
     {
@@ -27,7 +28,8 @@ namespace pure_pursuit_local_planner
       velocity = 0.5;
       look_ahead_dist = 0.1;
       look_ahead_ratio = 0.1;
-      road_threshold = 5;
+      road_dist_weight = 1.0;
+      goal_dist_weight = 1.0;
     }
 
     void loadParamFromNodeHandle(const ros::NodeHandle& nh);
