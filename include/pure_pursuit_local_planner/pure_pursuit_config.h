@@ -20,7 +20,8 @@ namespace pure_pursuit_local_planner
     double look_ahead_ratio;
     double road_dist_weight;
     double goal_dist_weight;
-    
+    double steering_factor;
+
     PurePursuitConfig()
     {
       max_planning_dist = 1.0;
@@ -30,6 +31,7 @@ namespace pure_pursuit_local_planner
       look_ahead_ratio = 0.1;
       road_dist_weight = 1.0;
       goal_dist_weight = 1.0;
+      steering_factor = 1.0;
     }
 
     void loadParamFromNodeHandle(const ros::NodeHandle& nh);

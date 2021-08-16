@@ -115,6 +115,8 @@ namespace pure_pursuit_local_planner
       //cv::normalize(dist_32f, dist_32f, 0, 255, cv::NORM_MINMAX);
       dist_map_32f.convertTo(dist_map, CV_8U);
 
+      double dist_min, dist_max;
+      cv::minMaxLoc(dist_map, &dist_min, &dist_max);
 
       geometry_msgs::PoseStamped tmp_pose, cmp_pose;
       double goal_cost = 1000000000000000;
@@ -139,9 +141,11 @@ namespace pure_pursuit_local_planner
 
             double x_diff = dist_x - furthest_pose.pose.position.x;
             double y_diff = dist_y - furthest_pose.pose.position.y;
-            double cost = distance_points2d(cmp_pose.pose.position, furthest_pose.pose.position) / cfg.goal_dist_weight;
-            cost += -dist_value / cfg.road_dist_weight;
-          
+
+            double cost = distance_points2d(cmp_pose.pose.position, furthest_pose.pose.position) * cfg.goal_dist_weight;
+            cost += (dist_max - dist_value) * cfg.road_dist_weight;
+            //ROS_INFO("C1: %f   C2: %f    C1_F: %f,   C2_F: %f", distance_points2d(cmp_pose.pose.position, furthest_pose.pose.position),(dist_max - dist_value), distance_points2d(cmp_pose.pose.position, furthest_pose.pose.position) * cfg.goal_dist_weight, (dist_max - dist_value) * cfg.road_dist_weight);
+
             if(cost < goal_cost) {
               goal_cost = cost;
               goal_pose = tmp_pose;

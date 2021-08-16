@@ -73,7 +73,9 @@ namespace pure_pursuit_local_planner {
     //true if the goal point is reache and orientation of goal is reached
     bool goal_reached_;
     //for dynamic reconfigure
-    dynamic_reconfigure::Server<PurePursuitReconfigureConfig> *dsrv_;
+    boost::shared_ptr< dynamic_reconfigure::Server<PurePursuitReconfigureConfig> > config_server_;
+    dynamic_reconfigure::Server<pure_pursuit_local_planner::PurePursuitReconfigureConfig>::CallbackType config_callback_;
+
     pure_pursuit_local_planner::PurePursuitConfig cfg_;
     //global plan which we run along
     std::vector<geometry_msgs::PoseStamped> global_plan_;

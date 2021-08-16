@@ -8,7 +8,7 @@ PLUGINLIB_EXPORT_CLASS(pure_pursuit_local_planner::PurePursuitPlanner, nav_core:
 
 namespace pure_pursuit_local_planner {
 
-  PurePursuitPlanner::PurePursuitPlanner() : initialized_(false){}
+  PurePursuitPlanner::PurePursuitPlanner() : initialized_(false), config_server_(){}
 
   PurePursuitPlanner::~PurePursuitPlanner() {}
 
@@ -24,10 +24,9 @@ namespace pure_pursuit_local_planner {
     local_goal_publisher_ = nh.advertise<geometry_msgs::PoseStamped>("local_goal_pose", 1);
     global_goal_publisher_ = nh.advertise<geometry_msgs::PoseStamped>("global_goal_pose", 1);
 
-    //Parameter for dynamic reconfigure
-    dsrv_ = new dynamic_reconfigure::Server<PurePursuitReconfigureConfig>(nh);
-    dynamic_reconfigure::Server<PurePursuitReconfigureConfig>::CallbackType cb = boost::bind(&PurePursuitPlanner::reconfigureCB, this, _1, _2);
-    dsrv_->setCallback(cb);
+    config_server_ = boost::make_shared< dynamic_reconfigure::Server<PurePursuitReconfigureConfig> >(nh);
+    config_callback_ = boost::bind(&PurePursuitPlanner::reconfigureCB, this, _1, _2);
+    config_server_->setCallback(config_callback_);
 
     last_vel_ = cfg_.velocity;
 
@@ -38,6 +37,7 @@ namespace pure_pursuit_local_planner {
 
   void PurePursuitPlanner::reconfigureCB(PurePursuitReconfigureConfig &config, uint32_t level)
   {
+    ROS_INFO("Reconfigure PurePursuitLocalPlanner");
     cfg_.reconfigure(config);
   }
 
@@ -92,7 +92,7 @@ namespace pure_pursuit_local_planner {
 
     // Gradient of line connecting (0|0) and (dx|dy)
     double gradient = dx / dy;
-    // Y Position where line has a length of ld
+    // Y Position where line has a length of ld1.0
     double py = ld / std::sqrt( 1 + gradient*gradient );
 
     // Curvature of the arc connecting (0|0) and (px|py)
@@ -118,7 +118,7 @@ namespace pure_pursuit_local_planner {
     local_plan_publisher_.publish(local_plan);
     double ang_z = (2 * cfg_.velocity) / ld_2 * py;
     ang_z = std::copysign(ang_z, gradient);
-    cmd_vel.angular.z = ang_z;
+    cmd_vel.angular.z = ang_z * cfg_.steering_factor;
 
     cmd_vel.linear.x = cfg_.velocity;
     last_vel_ = cfg_.velocity;

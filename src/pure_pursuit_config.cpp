@@ -13,6 +13,7 @@ void PurePursuitConfig::loadParamFromNodeHandle(const ros::NodeHandle& nh)
   nh.param("look_ahead_ratio", look_ahead_ratio, look_ahead_ratio);
   nh.param("road_dist_weight", road_dist_weight, road_dist_weight);
   nh.param("goal_dist_weight", goal_dist_weight, goal_dist_weight);
+  nh.param("steering_factor", steering_factor, steering_factor);
 }
 
 void PurePursuitConfig::reconfigure(PurePursuitReconfigureConfig& cfg)
@@ -24,6 +25,7 @@ void PurePursuitConfig::reconfigure(PurePursuitReconfigureConfig& cfg)
   look_ahead_ratio = cfg.look_ahead_ratio;
   road_dist_weight = cfg.road_dist_weight;
   goal_dist_weight = cfg.goal_dist_weight;
+  steering_factor = cfg.steering_factor;
 }
 
     
